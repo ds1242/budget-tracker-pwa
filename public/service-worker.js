@@ -34,6 +34,7 @@ self.addEventListener('install', function(event) {
 
 //  activate the serivce worker and remove old data from the cache
 self.addEventListener('activate', function(event) {
+    console.log('service worker activated')
     event.waitUntil(
         caches.keys().then(keyList => {
             return Promise.all(
@@ -47,4 +48,42 @@ self.addEventListener('activate', function(event) {
         })
     );
     self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+    if (event.request.url.includes('/api/transaction')) {
+        event.respondWith(
+          caches
+            .open(DATA_CACHE_NAME)
+            .then(cache => {
+              console.log(cache);
+              return fetch(event.request)
+                .then(response => {
+                  if (response.status === 200) {
+                    cache.put(event.request.url, response.clone());
+                  }
+                  return response;
+                })
+                .catch(err => {
+                  console.log(err);
+                  return cache.match(event.request);
+                })
+            })
+            .catch(error => console.log(error))
+        );
+      } else {
+        event.respondWith(
+          fetch(event.request)
+            .catch(error => {
+              console.log(error);
+              return caches.match(event.request).then(response => {
+                if (response) {
+                  return response;
+                } else if (event.request.headers.get('accept').includes('text/html')) {
+                  return caches.match(event.request.url);
+                }
+              })
+            })
+        )
+      }
 });
